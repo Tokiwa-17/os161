@@ -49,8 +49,8 @@ struct frame_table_entry {
     size_t next_free_frame;
 };
 
+
 /* Initialization function */
-void frame_table_bootstrap(void);
 void vm_bootstrap(void);
 
 /* Fault handling function called by trap code */

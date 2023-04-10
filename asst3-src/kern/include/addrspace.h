@@ -66,7 +66,7 @@ struct addrspace {
 #else
         /* Put stuff here for your VM system */
         struct region * header; // header of linked region list
-        vaddr_t pagetable;      // address of the page tabel
+        vaddr_t pagetable;      // address of the page table
 #endif
 };
 
@@ -110,6 +110,7 @@ struct addrspace {
  * Note that when using dumbvm, addrspace.c is not used and these
  * functions are found in dumbvm.c.
  */
+void frame_table_bootstrap(void);
 
 struct addrspace *as_create(void);
 int               as_copy(struct addrspace *src, struct addrspace **ret);

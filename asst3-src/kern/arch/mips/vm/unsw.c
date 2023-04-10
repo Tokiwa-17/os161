@@ -38,8 +38,6 @@ vaddr_t firstfree;   /* first free virtual address; set by start.S */
 static paddr_t firstpaddr;  /* address of first free physical page */
 static paddr_t lastpaddr;   /* one past end of last free physical page */
 
-
-
 typedef struct ft_entry {
         unsigned allocated:1; /* the corresponding frame is allocated */
         unsigned not_last:1; /* the frame is part of a multiframe allocation */

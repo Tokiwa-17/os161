@@ -47,6 +47,122 @@
  * part of the VM subsystem.
  *
  */
+static struct frame_table_entry *frame_table;
+static paddr_t frame_top, free_frame;
+
+void
+frame_table_bootstrap(void) 
+{   
+	paddr_t firstpaddr = 0, lastpaddr;
+    lastpaddr = ram_getsize();
+    unsigned long frame_num = (lastpaddr - firstpaddr) / PAGE_SIZE * 2;
+    unsigned long frame_table_size = frame_num * sizeof(struct frame_table_entry);
+    frame_table_size = ROUNDUP(frame_table_size, PAGE_SIZE);
+    unsigned long entry_num = frame_table_size / PAGE_SIZE;
+    KASSERT((frame_table_size & PAGE_FRAME) == frame_table_size);
+
+    frame_top = firstpaddr;
+    free_frame = firstpaddr + frame_table_size;
+    if (free_frame >= lastpaddr) 
+	{
+		panic("vm: free space is no more sufficient.\n");
+	}
+
+    frame_table = (struct frame_table_entry *) PADDR_TO_KVADDR(firstpaddr);
+    struct frame_table_entry*  p = frame_table;
+
+    paddr_t paddr;
+    for (unsigned long i = 0; i < frame_num - 1; i++)
+    {
+        if (i < entry_num)
+        {
+            p -> next_free_frame = 0; // set to allocated
+            p += 1;
+        } else {
+            paddr = frame_top + (i + 1) * PAGE_SIZE;
+            p -> next_free_frame = paddr;
+            p += 1;
+        }
+    }
+}
+
+// static
+// paddr_t
+// getppages(unsigned long npages)
+// {
+// 	paddr_t paddr;	
+// 	spinlock_acquire(&frametable_lock);
+// 	// if (frame_table == 0)
+// 	// 	paddr = ram_stealmem(npages);
+// 	// else
+// 	// {
+// 	if (npages > 1)
+// 	{
+// 		spinlock_release(&frametable_lock);
+// 		return 0;
+// 	}
+// 	if (free_frame == 0) // no free space left
+// 	{
+// 		spinlock_release(&frametable_lock);
+// 		return 0;
+// 	}
+
+// 	paddr = free_frame;
+// 	int i = (free_frame - frame_top) / PAGE_SIZE;
+// 	struct frame_table_entry *p = frame_table + i;
+	
+// 	free_frame = p -> next_free_frame;
+// 	p -> next_free_frame = 0;
+// 	//}
+// 	spinlock_release(&frametable_lock);
+	
+// 	return paddr;
+// }
+
+// // /* Allocate/free some kernel-space virtual pages */
+// static
+// vaddr_t
+// alloc_kpages(unsigned npages)
+// {
+// 	paddr_t pa;
+
+// 	pa = getppages(npages);
+// 	if (pa==0) {
+// 		return 0;
+// 	}
+// 	return PADDR_TO_KVADDR(pa);
+// }
+
+// static
+// void
+// freeppages(paddr_t paddr)
+// {
+// 	struct frame_table_entry *p;
+// 	int i;
+// 	spinlock_acquire(&frametable_lock);
+// 	i = (paddr - frame_top) / PAGE_SIZE;
+// 	p = frame_table + i;
+// 	p->next_free_frame = free_frame;
+// 	free_frame = paddr;
+// 	spinlock_release(&frametable_lock);
+// }
+
+// static
+// void
+// free_kpages(vaddr_t addr)
+// {
+// 	KASSERT(addr >= MIPS_KSEG0);
+	
+// 	paddr_t paddr = KVADDR_TO_PADDR(addr);
+// 	if (paddr <= frame_top) {
+// 		// memory leakage
+// 	}
+// 	else {
+// 		freeppages(paddr);
+// 	}
+// }
+
+
 
 struct addrspace *
 as_create(void)
@@ -61,7 +177,13 @@ as_create(void)
 	/*
 	 * Initialize as needed.
 	 */
-
+	as->pagetable = alloc_kpages(1);
+	if (as->pagetable == 0) {
+		kprintf("Can't create page table. \n");
+		return NULL;
+	}
+	// as_zero_region(as->as_pagetable, 1);
+	as->header = 0;
 	return as;
 }
 
