@@ -47,6 +47,12 @@ struct vnode;
  *
  * You write this.
  */
+struct region {
+	vaddr_t vbase;	// the start of the virtual address for this region
+	size_t npages;	// the number of pages occupied by this region
+	unsigned int permissions;	// readable, writable and executable
+	struct region *next_region;	// link to the next region
+};
 
 struct addrspace {
 #if OPT_DUMBVM
@@ -59,22 +65,11 @@ struct addrspace {
         paddr_t as_stackpbase;
 #else
         /* Put stuff here for your VM system */
+        struct region * header; // header of linked region list
+        vaddr_t pagetable;      // address of the page tabel
 #endif
 };
 
-struct pte {
-// page tabel entry
-        paddr_t     paddr;      //physical address
-        uint32_t    flags;      //flag of current pte
-        struct hpt_entry *hpte;
-};
-
-struct hpt_entry {
-        struct pte *pte; 
-        struct hpt_entry *next; // handle hash collision
-};
-
-struct hpt_entry *hpt;
 /*
  * Functions in addrspace.c:
  *

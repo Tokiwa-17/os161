@@ -44,8 +44,13 @@
 #define VM_FAULT_WRITE       1    /* A write was attempted */
 #define VM_FAULT_READONLY    2    /* A write to a readonly page was attempted*/
 
+struct frame_table_entry {
+    // address of next free frame
+    size_t next_free_frame;
+};
 
 /* Initialization function */
+void frame_table_bootstrap(void);
 void vm_bootstrap(void);
 
 /* Fault handling function called by trap code */
