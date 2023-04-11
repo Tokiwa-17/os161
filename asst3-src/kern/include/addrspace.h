@@ -57,6 +57,8 @@ struct as_region {
 	struct as_region *next_region;	// link to the next region
 };
 
+struct as_region *create_region(vaddr_t v, size_t s, mode_t m, mode_t bm);
+
 struct addrspace {
 #if OPT_DUMBVM
         vaddr_t as_vbase1;

@@ -11,6 +11,41 @@
 // static struct spinlock stealmem_lock = SPINLOCK_INITIALIZER;
 static struct lock* hpt_lock;
 
+uint32_t hash_func(struct addrspace *as, vaddr_t faultaddr)
+{
+    uint32_t index;
+    index = (((uint32_t) as) ^ (faultaddr >> 12)) % hpt_size;
+    return index;
+}
+
+bool hpt_insert(struct addrspace *as, vaddr_t hi, paddr_t lo)
+{
+    uint32_t idx = hash_func(as, hi);
+    if (hpt[idx].entryLO == 0) 
+    {
+        hpt[idx].entryLO = lo;
+        hpt[idx].entryHI = hi;
+        hpt[idx].as = as;
+        return false;
+    }
+    while (hpt[idx].next != -1)
+    {
+        idx = hpt[idx].next;
+    }
+    for (uint32_t new_idx = 0; new_idx < hpt_size; new_idx++)
+    {
+        if (hpt[new_idx].entryHI == 0 && hpt[new_idx].entryLO == 0 && hpt[new_idx].next == -1)
+        {
+            hpt[new_idx].entryHI = hi;
+            hpt[new_idx].entryLO = lo;
+            hpt[new_idx].as = as;
+            hpt[idx].next = new_idx;
+            return false;
+        }
+    }
+    return true;
+}
+
 void 
 vm_bootstrap(void)
 {

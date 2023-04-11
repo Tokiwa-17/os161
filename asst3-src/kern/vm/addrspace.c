@@ -37,7 +37,9 @@
 #include <addrspace.h>
 #include <vm.h>
 #include <proc.h>
+#include <synch.h>
 
+static struct lock* hpt_lock;
 /*
  * Note! If OPT_DUMBVM is set, as is the case until you start the VM
  * assignment, this file is not compiled or linked or in any way
@@ -47,44 +49,20 @@
  * part of the VM subsystem.
  *
  */
-// static struct frame_table_entry *frame_table;
-// static paddr_t frame_top, free_frame;
-
-// void
-// frame_table_bootstrap(void) 
-// {   
-// 	paddr_t firstpaddr = 0, lastpaddr;
-//     lastpaddr = ram_getsize();
-//     unsigned long frame_num = (lastpaddr - firstpaddr) / PAGE_SIZE * 2;
-//     unsigned long frame_table_size = frame_num * sizeof(struct frame_table_entry);
-//     frame_table_size = ROUNDUP(frame_table_size, PAGE_SIZE);
-//     unsigned long entry_num = frame_table_size / PAGE_SIZE;
-//     KASSERT((frame_table_size & PAGE_FRAME) == frame_table_size);
-
-//     frame_top = firstpaddr;
-//     free_frame = firstpaddr + frame_table_size;
-//     if (free_frame >= lastpaddr) 
-// 	{
-// 		panic("vm: free space is no more sufficient.\n");
-// 	}
-
-//     frame_table = (struct frame_table_entry *) PADDR_TO_KVADDR(firstpaddr);
-//     struct frame_table_entry*  p = frame_table;
-
-//     paddr_t paddr;
-//     for (unsigned long i = 0; i < frame_num - 1; i++)
-//     {
-//         if (i < entry_num)
-//         {
-//             p -> next_free_frame = 0; // set to allocated
-//             p += 1;
-// 			continue;
-//         } 
-// 		paddr = frame_top + (i + 1) * PAGE_SIZE;
-// 		p -> next_free_frame = paddr;
-// 		// p += 1;
-//     }
-// }
+struct as_region *
+create_region(vaddr_t v, size_t s, mode_t m, mode_t bm)
+{
+	struct as_region * reg = kmalloc(sizeof(struct as_region));
+	if (reg == NULL) {
+		return NULL;
+	}
+	reg -> vbase = v;
+	reg -> size = s;
+	reg -> mode = m;
+	reg -> bk_mode = bm;
+	reg -> next_region = NULL;
+	return reg;
+}
 
 struct addrspace *
 as_create(void)
@@ -97,11 +75,12 @@ as_create(void)
 	if (as == NULL) {
 		return NULL;
 	}
-
 	/*
 	 * Initialize as needed.
 	 */
-
+	as_count += 1;
+	as -> header = NULL;
+	as -> id = as_count << 6;
 	return as;
 }
 
@@ -119,10 +98,31 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 	/*
 	 * Write this.
 	 */
+	KASSERT(old -> header != NULL);
+	newas -> header = create_region(old -> header -> vbase, old -> header -> size, old -> header -> mode, old -> header -> bk_mode);
 
-	(void)old;
-
+	struct as_region *old_ptr = old -> header -> next_region;
+	struct as_region *new_ptr = newas -> header;
+	while(old_ptr != NULL) 
+	{
+		struct as_region *new_region = create_region(old_ptr -> vbase, old_ptr -> size, old_ptr -> mode, old_ptr -> bk_mode);
+		if (new_region == NULL)
+		{
+			as_destroy(newas);
+			return ENOMEM;
+		}
+		new_ptr -> next_region = new_region;
+		new_ptr = new_ptr -> next_region;
+		old_ptr = old_ptr -> next_region;
+	}
 	*ret = newas;
+	uint32_t oldid = old -> id, newid = newas -> id;
+	uint32_t new_cnt = 0, empty_cnt = 0;
+	lock_acquire(hpt_lock);
+	for (uint32_t i = 0; i < hpt_size; i++)
+	{
+
+	}
 	return 0;
 }
 

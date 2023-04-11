@@ -41,13 +41,17 @@ uint32_t frame_table_size;
 uint32_t frame_table_start;
 
 struct hash_page_table {
-    uint32_t entryHI;
-    uint32_t entryLO;
-    struct addrspace* as;
-    int next;
+    uint32_t entryHI;     // vaddr
+    uint32_t entryLO;     // paddr
+    struct addrspace* as; // addrspace of region
+    int next;             // deal with hash collision
 };
 
 struct hash_page_table* hpt;
+
+uint32_t hash_func(struct addrspace *as, vaddr_t faultaddr);
+
+bool hpt_insert(struct addrspace *as, vaddr_t hi, paddr_t lo);
 
 #include <machine/vm.h>
 
