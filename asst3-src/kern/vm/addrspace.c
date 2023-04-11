@@ -64,6 +64,12 @@ create_region(vaddr_t v, size_t s, mode_t m, mode_t bm)
 	return reg;
 }
 
+static
+void 
+free_kpages_frame(uint32_t frame) {
+    free_kpages(PADDR_TO_KVADDR(frame << 12));
+}
+
 struct addrspace *
 as_create(void)
 {
@@ -169,7 +175,56 @@ as_destroy(struct addrspace *as)
 	/*
 	 * Clean up as needed.
 	 */
+	struct as_region *cur = as -> header, *prev;
+	while(cur != NULL) 
+	{
+		prev = cur;
+		cur = cur -> next_region;
+		kfree(prev);
+	}
 
+	uint32_t id = as -> id;
+	uint32_t prev_idx;
+	int next_delete;
+	uint32_t addHI, addLO;
+	struct addrspace* addas;
+
+	lock_acquire(hpt_lock);
+	for (uint32_t i = 0; i < hpt_size; i++)
+	{
+		if (hpt[i].entryLO != 0 && (hpt[i].entryHI & ~PAGE_FRAME) == id)
+		{
+			prev_idx = hash_func(as, hpt[i].entryHI);
+			if (prev_idx != i) // 从冲突的hash链表中删除
+			{
+				while (prev_idx != i)
+				{
+					prev_idx = hpt[prev_idx].next;
+				}
+				hpt[prev_idx].next = -1;
+			}
+			next_delete = hpt[i].next;
+			free_kpages_frame(hpt[i].entryLO >> 12);
+			hpt[i].entryHI = 0;
+            hpt[i].entryLO = 0;
+            hpt[i].as = NULL;
+            hpt[i].next = -1;
+			while (next_delete != -1) {
+                hpt[prev_idx].next = -1;
+                prev_idx = next_delete;
+                next_delete = hpt[next_delete].next;
+                addHI = hpt[prev_idx].entryHI;
+                hpt[prev_idx].entryHI = 0;
+                addLO = hpt[prev_idx].entryLO;
+                hpt[prev_idx].entryLO = 0;
+                addas = hpt[prev_idx].as;
+                hpt[prev_idx].as = NULL;
+                hpt[prev_idx].next = -1;
+                hpt_insert(addas, addHI, addLO);
+            }
+		}
+	}
+	lock_release(hpt_lock);
 	kfree(as);
 }
 
