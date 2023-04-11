@@ -117,12 +117,49 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 	}
 	*ret = newas;
 	uint32_t oldid = old -> id, newid = newas -> id;
-	uint32_t new_cnt = 0, empty_cnt = 0;
+	uint32_t new_cnt = 0, empty_cnt = 0, new_frame, old_frame, old_page;
 	lock_acquire(hpt_lock);
 	for (uint32_t i = 0; i < hpt_size; i++)
 	{
-
+		if ((hpt[i].entryHI & ~PAGE_FRAME) == oldid) // id = cnt << 6, 4k
+			new_cnt ++;
+		else if (hpt[i].entryHI == 0 && hpt[i].entryLO == 0 && hpt[i].next == -1)
+			empty_cnt ++;
 	}
+	if (empty_cnt < new_cnt)
+	{
+		lock_release(hpt_lock);
+		as_destroy(newas);
+		return ENOMEM;
+	}
+	uint32_t available_cnt = 0;
+	for (uint32_t i = frame_table_start; i < frame_table_size; i++)
+	{
+		if (frame_table_status[i])
+			available_cnt ++;
+	}
+	if (available_cnt < new_cnt)
+	{
+		lock_release(hpt_lock);
+		as_destroy(newas);
+		return ENOMEM;
+	}
+	for (uint32_t i = 0; i < hpt_size; i++)
+	{
+		if (hpt[i].entryLO != 0 && (hpt[i].entryHI & ~PAGE_FRAME) == oldid)
+		{ // 找到属于 old 的进程 且 非空的页表项
+			//new_frame = alloc_kpages_frame() << 12; 
+			vaddr_t temp = alloc_kpages(0);			// 计算新的页框号
+			new_frame = temp ? (KVADDR_TO_PADDR(alloc_kpages(0)) << 12) : 0;
+			old_page = hpt[i].entryHI & PAGE_FRAME; 
+            old_frame = hpt[i].entryLO & PAGE_FRAME;
+			memmove((void*)PADDR_TO_KVADDR(new_frame), (const void*)PADDR_TO_KVADDR(old_frame), PAGE_SIZE); // 复制旧页到新页
+            hpt_insert(newas, old_page | newid, new_frame | TLBLO_VALID); 
+			/* 6 ~ 12 位 页id, old_page | newid 虚拟内存页号不变*/
+			/* 分配到新的页框， 标志位置为 VALID表示已被占用 */
+		}
+	}
+	lock_release(hpt_lock);
 	return 0;
 }
 
