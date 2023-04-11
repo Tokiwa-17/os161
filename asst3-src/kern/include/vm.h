@@ -30,6 +30,8 @@
 #ifndef _VM_H_
 #define _VM_H_
 
+#define USERTOP MIPS_KSEG0
+
 /*
  * VM system-related definitions.
  *

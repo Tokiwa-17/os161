@@ -357,12 +357,20 @@ as_complete_load(struct addrspace *as)
 int
 as_define_stack(struct addrspace *as, vaddr_t *stackptr)
 {
+/* as_define_stack - set up the stack region in the address space.
+ * (Normally called *after* as_complete_load().) Hands
+ * back the initial stack pointer for the new process. */
 	/*
 	 * Write this.
 	 */
 
-	(void)as;
-
+	struct as_region *cur = as -> header;
+	while(cur -> next_region != NULL)
+		cur = cur -> next_region;
+	struct as_region *stack_region = create_region(USERTOP - STACK_SIZE, STACK_SIZE / PAGE_SIZE, (PF_W | PF_R), (PF_W | PF_R));
+	if (stack_region == NULL)
+		return ENOMEM;
+	cur -> next_region = stack_region; 
 	/* Initial user-level stack pointer */
 	*stackptr = USERSTACK;
 
