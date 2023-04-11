@@ -283,14 +283,33 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 	/*
 	 * Write this.
 	 */
+	size_t n_pages;
+	// handle offst
+	memsize += vaddr & (~PAGE_FRAME);
+	vaddr = vaddr & PAGE_FRAME;
+	memsize = memsize + PAGE_SIZE - 1;
+	n_pages = memsize / PAGE_SIZE;
+	KASSERT(as != NULL);
 
-	(void)as;
-	(void)vaddr;
-	(void)memsize;
-	(void)readable;
-	(void)writeable;
-	(void)executable;
-	return ENOSYS; /* Unimplemented */
+	struct as_region *ptr = as -> header;
+	if (ptr == NULL) 
+	{
+		struct as_region * new_region = create_region(vaddr, n_pages, (readable | writeable | executable), (readable | writeable | executable));
+		if (new_region == NULL) 
+			return ENOMEM;
+		as -> header = new_region;
+		return 0;
+	} 
+	while(ptr -> next_region != NULL)
+	{
+		ptr = ptr -> next_region;
+	}
+	struct as_region *new_region = create_region(vaddr, n_pages, (readable | writeable |
+	executable), (readable | writeable | executable));
+	if (new_region == NULL)
+		return ENOMEM;
+	ptr -> next_region = new_region;
+	return 0;
 }
 
 int
