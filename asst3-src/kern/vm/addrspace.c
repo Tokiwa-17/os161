@@ -231,6 +231,8 @@ as_destroy(struct addrspace *as)
 void
 as_activate(void)
 {
+	 /* as_activate - make curproc's address space the one currently
+      * "seen" by the processor. */
 	struct addrspace *as;
 
 	as = proc_getas();
@@ -245,6 +247,13 @@ as_activate(void)
 	/*
 	 * Write this.
 	 */
+	int spl;
+	spl = splhigh();
+	for (int i = 0; i < NUM_TLB; i++)
+	{
+		tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
+	}
+	splx(spl); // restore
 }
 
 void
