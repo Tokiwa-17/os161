@@ -47,11 +47,14 @@ struct vnode;
  *
  * You write this.
  */
-struct region {
+uint32_t as_count;
+
+struct as_region {
 	vaddr_t vbase;	// the start of the virtual address for this region
-	size_t npages;	// the number of pages occupied by this region
-	unsigned int permissions;	// readable, writable and executable
-	struct region *next_region;	// link to the next region
+        size_t size;
+        mode_t mode;
+        mode_t bk_mode;
+	struct as_region *next_region;	// link to the next region
 };
 
 struct addrspace {
@@ -65,8 +68,8 @@ struct addrspace {
         paddr_t as_stackpbase;
 #else
         /* Put stuff here for your VM system */
-        struct region * header; // header of linked region list
-        vaddr_t pagetable;      // address of the page table
+        struct as_region * header; // header of linked region list
+        uint32_t id;
 #endif
 };
 
@@ -110,7 +113,7 @@ struct addrspace {
  * Note that when using dumbvm, addrspace.c is not used and these
  * functions are found in dumbvm.c.
  */
-void frame_table_bootstrap(void);
+// void frame_table_bootstrap(void);
 
 struct addrspace *as_create(void);
 int               as_copy(struct addrspace *src, struct addrspace **ret);

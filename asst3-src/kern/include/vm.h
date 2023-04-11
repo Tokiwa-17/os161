@@ -35,7 +35,19 @@
  *
  * You'll probably want to add stuff here.
  */
+uint32_t hpt_size;
+bool *frame_table_status;
+uint32_t frame_table_size;
+uint32_t frame_table_start;
 
+struct hash_page_table {
+    uint32_t entryHI;
+    uint32_t entryLO;
+    struct addrspace* as;
+    int next;
+};
+
+struct hash_page_table* hpt;
 
 #include <machine/vm.h>
 
