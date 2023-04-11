@@ -38,6 +38,7 @@
 #include <vm.h>
 #include <proc.h>
 #include <synch.h>
+#include <elf.h>
 
 static struct lock* hpt_lock;
 /*
@@ -315,11 +316,18 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 int
 as_prepare_load(struct addrspace *as)
 {
+ /* as_prepare_load - this is called before actually loading from an
+  * executable into the address space. */
 	/*
 	 * Write this.
 	 */
 
-	(void)as;
+	struct as_region *cur = as -> header;
+	while(cur != NULL)
+	{
+		cur -> mode = cur -> mode | PF_W;
+		cur = cur -> next_region;
+	}
 	return 0;
 }
 
@@ -330,7 +338,19 @@ as_complete_load(struct addrspace *as)
 	 * Write this.
 	 */
 
-	(void)as;
+	struct as_region *cur = as -> header;
+	while(cur != NULL)
+	{
+		cur -> mode = cur -> bk_mode;
+		cur = cur -> next_region;
+	}	
+	int spl;
+	spl = splhigh();
+	for (int i = 0; i < NUM_TLB; i++)
+	{
+		tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
+	}
+	splx(spl); // restore	
 	return 0;
 }
 
