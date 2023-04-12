@@ -6,10 +6,12 @@
 #include <vm.h>
 #include <machine/tlb.h>
 #include <synch.h>
+#include <current.h>
+#include <proc.h>
+#include <spl.h>
 
 /* Place your page table functions here */
 // static struct spinlock stealmem_lock = SPINLOCK_INITIALIZER;
-static struct lock* hpt_lock;
 
 uint32_t hash_func(struct addrspace *as, vaddr_t faultaddr)
 {
@@ -54,7 +56,6 @@ vm_bootstrap(void)
      * You may or may not need to add anything here depending what's
      * provided or required by the assignment spec.
      */
-    //  frame_table_bootstrap();   
     as_count = 0;
     hpt_lock = lock_create("hpt_lock");
     unsigned long ram_size = ram_getsize();
@@ -89,10 +90,8 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 {
     (void) faulttype;
     (void) faultaddress;
+    return 0;
 
-    panic("vm_fault hasn't been written yet\n");
-
-    return EFAULT;
 }
 
 /*

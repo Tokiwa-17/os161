@@ -1,6 +1,11 @@
 {
     "files.associations": {
         "vm.h": "c",
-        "addrspace.h": "c"
+        "addrspace.h": "c",
+        "synch.h": "c",
+        "proc.h": "c",
+        "opt-unsw.h": "c",
+        "current.h": "c",
+        "tlb.h": "c"
     }
 }

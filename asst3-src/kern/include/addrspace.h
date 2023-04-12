@@ -33,7 +33,7 @@
 /*
  * Address space structure and operations.
  */
-
+#define STACKPAGES 16
 
 #include <vm.h>
 #include "opt-dumbvm.h"
@@ -53,11 +53,10 @@ struct as_region {
 	vaddr_t vbase;	// the start of the virtual address for this region
         size_t size;
         mode_t mode;
-        mode_t bk_mode;
 	struct as_region *next_region;	// link to the next region
 };
 
-struct as_region *create_region(vaddr_t v, size_t s, mode_t m, mode_t bm);
+struct as_region *create_region(vaddr_t v, size_t s, mode_t m);
 
 struct addrspace {
 #if OPT_DUMBVM

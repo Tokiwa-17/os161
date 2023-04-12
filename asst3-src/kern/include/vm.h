@@ -30,8 +30,6 @@
 #ifndef _VM_H_
 #define _VM_H_
 
-#define USERTOP MIPS_KSEG0
-
 /*
  * VM system-related definitions.
  *
@@ -41,6 +39,7 @@ uint32_t hpt_size;
 bool *frame_table_status;
 uint32_t frame_table_size;
 uint32_t frame_table_start;
+struct lock* hpt_lock;
 
 struct hash_page_table {
     uint32_t entryHI;     // vaddr
@@ -62,11 +61,8 @@ bool hpt_insert(struct addrspace *as, vaddr_t hi, paddr_t lo);
 #define VM_FAULT_WRITE       1    /* A write was attempted */
 #define VM_FAULT_READONLY    2    /* A write to a readonly page was attempted*/
 
-struct frame_table_entry {
-    // address of next free frame
-    size_t next_free_frame;
-};
-
+#define CONVERT_FRAME_ADDRESE(i)    i<<12
+#define CONVERT_ADDRESE_FRAME(p)    p>>12
 
 /* Initialization function */
 void vm_bootstrap(void);

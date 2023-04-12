@@ -31,11 +31,12 @@ vaddr_t alloc_kpages(unsigned int npages) {
     * IMPLEMENT ME.  You should replace this code with a proper
     *                implementation.
     */
-    if (frame_table == NULL) {
+    if (frame_table_status == NULL) {
         paddr_t addr;
 
         spinlock_acquire(&stealmem_lock);
-        addr = ram_stealmem(npages);
+        unsigned long npages_ = (unsigned long) npages;
+        addr = ram_stealmem(npages_);
         spinlock_release(&stealmem_lock);
 
         if(addr == 0)
@@ -47,8 +48,8 @@ vaddr_t alloc_kpages(unsigned int npages) {
         spinlock_acquire(&stealmem_lock);
         
         for (i = frame_table_start; i < frame_table_size; ++i) {
-            if (frame_table[i]) {
-                frame_table[i] = false;
+            if (frame_table_status[i]) {
+                frame_table_status[i] = false;
                 bzero((void*)PADDR_TO_KVADDR(CONVERT_FRAME_ADDRESE(i)), PAGE_SIZE);
                 spinlock_release(&stealmem_lock);
                 return PADDR_TO_KVADDR(CONVERT_FRAME_ADDRESE(i));
@@ -69,7 +70,7 @@ void free_kpages_frame(uint32_t frame) {
 void free_kpages(vaddr_t addr) {
     spinlock_acquire(&stealmem_lock);
     addr = addr & PAGE_FRAME;
-    frame_table[CONVERT_ADDRESE_FRAME(KVADDR_TO_PADDR(addr))] = true;
+    frame_table_status[CONVERT_ADDRESE_FRAME(KVADDR_TO_PADDR(addr))] = true;
     bzero((void*)addr, PAGE_SIZE);
     spinlock_release(&stealmem_lock);
 }

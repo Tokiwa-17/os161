@@ -40,7 +40,6 @@
 #include <synch.h>
 #include <elf.h>
 
-static struct lock* hpt_lock;
 /*
  * Note! If OPT_DUMBVM is set, as is the case until you start the VM
  * assignment, this file is not compiled or linked or in any way
@@ -51,7 +50,7 @@ static struct lock* hpt_lock;
  *
  */
 struct as_region *
-create_region(vaddr_t v, size_t s, mode_t m, mode_t bm)
+create_region(vaddr_t v, size_t s, mode_t m)
 {
 	struct as_region * reg = kmalloc(sizeof(struct as_region));
 	if (reg == NULL) {
@@ -60,7 +59,6 @@ create_region(vaddr_t v, size_t s, mode_t m, mode_t bm)
 	reg -> vbase = v;
 	reg -> size = s;
 	reg -> mode = m;
-	reg -> bk_mode = bm;
 	reg -> next_region = NULL;
 	return reg;
 }
@@ -106,13 +104,13 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 	 * Write this.
 	 */
 	KASSERT(old -> header != NULL);
-	newas -> header = create_region(old -> header -> vbase, old -> header -> size, old -> header -> mode, old -> header -> bk_mode);
+	newas -> header = create_region(old -> header -> vbase, old -> header -> size, old -> header -> mode);
 
 	struct as_region *old_ptr = old -> header -> next_region;
 	struct as_region *new_ptr = newas -> header;
 	while(old_ptr != NULL) 
 	{
-		struct as_region *new_region = create_region(old_ptr -> vbase, old_ptr -> size, old_ptr -> mode, old_ptr -> bk_mode);
+		struct as_region *new_region = create_region(old_ptr -> vbase, old_ptr -> size, old_ptr -> mode);
 		if (new_region == NULL)
 		{
 			as_destroy(newas);
@@ -156,8 +154,17 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 		if (hpt[i].entryLO != 0 && (hpt[i].entryHI & ~PAGE_FRAME) == oldid)
 		{ // 找到属于 old 的进程 且 非空的页表项
 			//new_frame = alloc_kpages_frame() << 12; 
-			vaddr_t temp = alloc_kpages(0);			// 计算新的页框号
-			new_frame = temp ? (KVADDR_TO_PADDR(alloc_kpages(0)) << 12) : 0;
+			// 计算新的页框号
+			new_frame = alloc_kpages(1);
+			if (new_frame == 0)
+			{
+				lock_release(hpt_lock);
+				as_destroy(newas);
+				return ENOMEM;
+			}
+			new_frame = KVADDR_TO_PADDR(new_frame);
+
+			// new_frame = alloc_one_frame(1);
 			old_page = hpt[i].entryHI & PAGE_FRAME; 
             old_frame = hpt[i].entryLO & PAGE_FRAME;
 			memmove((void*)PADDR_TO_KVADDR(new_frame), (const void*)PADDR_TO_KVADDR(old_frame), PAGE_SIZE); // 复制旧页到新页
@@ -284,18 +291,19 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 	/*
 	 * Write this.
 	 */
+
 	size_t n_pages;
 	// handle offst
 	memsize += vaddr & (~PAGE_FRAME);
 	vaddr = vaddr & PAGE_FRAME;
-	memsize = memsize + PAGE_SIZE - 1;
+	memsize = (memsize + PAGE_SIZE - 1) & PAGE_FRAME;
 	n_pages = memsize / PAGE_SIZE;
 	KASSERT(as != NULL);
 
 	struct as_region *ptr = as -> header;
 	if (ptr == NULL) 
 	{
-		struct as_region * new_region = create_region(vaddr, n_pages, (readable | writeable | executable), (readable | writeable | executable));
+		struct as_region * new_region = create_region(vaddr, n_pages, (readable | writeable | executable));
 		if (new_region == NULL) 
 			return ENOMEM;
 		as -> header = new_region;
@@ -306,7 +314,7 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 		ptr = ptr -> next_region;
 	}
 	struct as_region *new_region = create_region(vaddr, n_pages, (readable | writeable |
-	executable), (readable | writeable | executable));
+	executable));
 	if (new_region == NULL)
 		return ENOMEM;
 	ptr -> next_region = new_region;
@@ -323,9 +331,12 @@ as_prepare_load(struct addrspace *as)
 	 */
 
 	struct as_region *cur = as -> header;
+	unsigned int permis = 0;
 	while(cur != NULL)
 	{
-		cur -> mode = cur -> mode | PF_W;
+		permis = cur -> mode;
+		cur -> mode = cur -> mode << 8;
+		cur -> mode = cur -> mode | permis | PF_W;
 		cur = cur -> next_region;
 	}
 	return 0;
@@ -337,20 +348,14 @@ as_complete_load(struct addrspace *as)
 	/*
 	 * Write this.
 	 */
-
-	struct as_region *cur = as -> header;
+	KASSERT(as != NULL);
+	KASSERT(as -> header != NULL);
+	struct as_region * cur = as -> header;
 	while(cur != NULL)
 	{
-		cur -> mode = cur -> bk_mode;
-		cur = cur -> next_region;
-	}	
-	int spl;
-	spl = splhigh();
-	for (int i = 0; i < NUM_TLB; i++)
-	{
-		tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
+		cur -> mode = cur -> mode >> 8;
+		cur = cur -> next_region;	
 	}
-	splx(spl); // restore	
 	return 0;
 }
 
@@ -367,7 +372,7 @@ as_define_stack(struct addrspace *as, vaddr_t *stackptr)
 	struct as_region *cur = as -> header;
 	while(cur -> next_region != NULL)
 		cur = cur -> next_region;
-	struct as_region *stack_region = create_region(USERTOP - STACK_SIZE, STACK_SIZE / PAGE_SIZE, (PF_W | PF_R), (PF_W | PF_R));
+	struct as_region *stack_region = create_region(USERSPACETOP - STACKPAGES * PAGE_SIZE, STACKPAGES, (PF_W | PF_R));
 	if (stack_region == NULL)
 		return ENOMEM;
 	cur -> next_region = stack_region; 
