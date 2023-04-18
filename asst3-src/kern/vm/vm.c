@@ -90,8 +90,97 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 {
     (void) faulttype;
     (void) faultaddress;
-    return 0;
+    struct addrspace *as;
+	int spl;
+	faultaddress &= PAGE_FRAME;
 
+    switch (faulttype) {
+	    case VM_FAULT_READONLY:
+		/* We always create pages read-write, so we can't get this */
+		    return EFAULT;
+	    case VM_FAULT_READ:
+	    case VM_FAULT_WRITE:
+		break;
+	    default:
+		return EINVAL;
+	}
+
+    if (curproc == NULL) {
+		/*
+		 * No process. This is probably a kernel fault early
+		 * in boot. Return EFAULT so as to panic instead of
+		 * getting into an infinite faulting loop.
+		 */
+		return EFAULT;
+	}
+
+	as = proc_getas();
+	if (as == NULL) {
+		/*
+		 * No address space set up. This is probably also a
+		 * kernel fault early in boot.
+		 */
+		return EFAULT;
+	}
+
+	/* Assert that the address space has been set up properly. */
+    struct as_region* curr = as->header;
+    bool notfound = true;
+    mode_t dirtybit = 0;
+    while (curr) {
+        if ((curr->vbase & PAGE_FRAME) <= faultaddress && ((curr->vbase>>12) + curr->size)<<12 > faultaddress) {
+            notfound = false;
+            dirtybit = curr->mode;
+            break;
+        }
+        curr = curr->next_region;
+    }
+
+    // if not in address space region
+    if (notfound)
+        return EFAULT;
+    lock_acquire(hpt_lock);
+	// calculate have privillage
+    dirtybit = (dirtybit & 2) ? TLBLO_DIRTY:0;
+    dirtybit |= TLBLO_VALID;
+
+    // if in hpt
+    faultaddress |= as->id;
+    uint32_t hi = hash_func(as, faultaddress);
+    while (1) {
+        if (hpt[hi].entryHI == faultaddress && hpt[hi].entryLO != 0) {
+            spl = splhigh();
+            tlb_random(hpt[hi].entryHI, hpt[hi].entryLO|dirtybit);
+            splx(spl);
+            lock_release(hpt_lock);
+            return 0;
+        } else if (hpt[hi].entryLO != 0 && hpt[hi].next != -1) {
+            hi = hpt[hi].next;
+        } else {
+            break;
+        }
+    }
+    // if not
+    //vaddr_t tmp = alloc_kpages(1);
+    vaddr_t temp = alloc_kpages(1);
+    if (temp == 0) {
+        lock_release(hpt_lock);
+        return EFAULT; 
+    }
+    uint32_t newframe = CONVERT_ADDRESE_FRAME(KVADDR_TO_PADDR(temp));
+    newframe = newframe<<12;
+
+    if (hpt_insert(as, faultaddress, newframe|TLBLO_VALID)) {
+        free_kpages(PADDR_TO_KVADDR(newframe << 12));
+            lock_release(hpt_lock);
+            return EFAULT;
+    }
+
+    spl = splhigh();
+    tlb_random(faultaddress, newframe|dirtybit);
+    splx(spl);
+    lock_release(hpt_lock);
+    return 0;
 }
 
 /*
